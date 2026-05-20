@@ -1,117 +1,107 @@
 # Text2SQLAgent
 
-## Project Overview
+## Overview
 
-This repository is an early-stage Text-to-SQL project focused on dataset preparation and query decomposition for a SQL benchmark task.
+This repository implements a simple Text-to-SQL pipeline for the benchmark question set in `data/sql_questions.csv`.
 
-The current implementation is centered around:
-- a benchmark question dataset (`data/sql_questions.csv`)
-- a Google Gemini-based question decomposition pipeline (`query_decomposition/query_decomposition.py`)
-- a record of decomposed structured outputs (`data/sql_questions_decomposed.csv`)
+The pipeline follows this flow:
 
-## Requirements Covered
+Natural language question  
+-> structured decomposition  
+-> SQL generation  
+-> PostgreSQL execution  
+-> validation and one retry  
+-> logged results and benchmark report
 
-### req1: SQL Benchmark Dataset Preparation and Evaluation Design
+## Task 3 Coverage
 
-Current progress:
-- Prepared a benchmark dataset of natural language SQL questions in `data/sql_questions.csv`.
-- Included the original benchmark question set PDF in `SQL Benchmark dataset/SQL Benchmark dataset.pdf`.
-- Implemented a decomposition pipeline to help parse questions into structured SQL planning components.
+The current pipeline includes:
 
-Not yet completed in this repository:
-- Manual creation of final ground truth SQL queries for each benchmark question.
-- Execution output screenshots or exported result verification.
-- A full evaluation module for actual Text-to-SQL agent outputs.
-
-Suggested evaluation strategy for the Text-to-SQL agent:
-- SQL correctness against ground truth queries
-- Execution success / runtime failure detection
-- Accuracy of returned result rows
-- Correct table/column selection
-- Join correctness and filter application
-- Error handling and retry/self-correction behavior
-- Natural language answer quality if results are converted to text
-- Query execution performance
-- Robustness to ambiguous or incomplete questions
-
-### req2: Query Understanding (Decomposition Task)
-
-Current progress:
-- Built a pipeline to decompose benchmark questions into structured components.
-- The decomposition output includes:
-  - `intent`
-  - `tables`
-  - `columns`
-  - `filters`
-  - `joins`
-- Example output is recorded in `data/sql_questions_decomposed.csv`.
-
-This matches the decomposition task by identifying the necessary SQL building blocks before writing a query.
+- structured decomposition input from `data/sql_questions_decomposed.csv`
+- automatic SQL generation for `SELECT` queries
+- aggregate query support for `COUNT`, `SUM`, `AVG`, `MIN`, and `MAX`
+- schema-aware identifier normalization using `sql/seed.sql`
+- PostgreSQL query execution
+- query safety validation that blocks non-`SELECT` statements
+- one retry attempt for recoverable SQL issues
+- CSV execution logging
+- benchmark report generation
+- JSON export of executed results
 
 ## Project Structure
 
-- `data/sql_questions.csv` — benchmark natural language questions.
-- `data/sql_questions_decomposed.csv` — decomposed results produced by the current pipeline.
-- `query_decomposition/config.py` — environment configuration for Google Gemini.
-- `query_decomposition/query_decomposition.py` — script to decompose questions into JSON components.
-- `SQL Benchmark dataset/SQL Benchmark dataset.pdf` — benchmark question dataset reference.
-- `sql/seed.sql` — placeholder schema file for future SQL and database setup.
-- `requirements.txt` — Python dependencies.
+- `data/sql_questions.csv` - benchmark questions
+- `data/sql_questions_decomposed.csv` - decomposed benchmark questions
+- `query_decomposition/query_decomposition.py` - Gemini-based decomposition script
+- `sql/seed.sql` - PostgreSQL schema and seed data
+- `text_to_sql_pipeline/database.py` - database connection and execution helpers
+- `text_to_sql_pipeline/schema.py` - local schema metadata loader from `sql/seed.sql`
+- `text_to_sql_pipeline/sql_generator.py` - decomposition-to-SQL conversion
+- `text_to_sql_pipeline/validator.py` - SQL safety validation
+- `text_to_sql_pipeline/executor.py` - execution, retry handling, and logging
+- `text_to_sql_pipeline/main.py` - benchmark runner
+- `run_pipeline.py` - top-level entrypoint
+- `logs/` - generated execution logs, reports, and result exports
 
 ## Setup
 
-1. Create or activate a Python virtual environment.
+1. Create a virtual environment.
 2. Install dependencies:
 
 ```bash
 python -m pip install -r requirements.txt
 ```
 
-3. Create a `.env` file in the repository root with:
+3. Create a `.env` file in the repository root:
 
 ```text
 GEMINI_API_KEY=<your_api_key>
 GEMINI_MODEL=gemini-1.0-mini
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DB=<your_database>
+POSTGRES_USER=<your_user>
+POSTGRES_PASSWORD=<your_password>
+POSTGRES_SSLMODE=prefer
 ```
 
-4. Ensure the `.env` file is present and valid before running the decomposition script.
+4. Load the schema and sample data into PostgreSQL using `sql/seed.sql`.
 
 ## Usage
 
-Run the decomposition pipeline with:
+Generate decompositions:
 
 ```bash
 python query_decomposition/query_decomposition.py
 ```
 
-Optional arguments:
-
-- `--input` — input CSV file path (default: `data/sql_questions.csv`)
-- `--output` — output CSV file path (default: `data/sql_questions_decomposed.csv`)
-
-Example:
+Run the benchmark pipeline:
 
 ```bash
-python query_decomposition/query_decomposition.py --input data/sql_questions.csv --output data/sql_questions_decomposed.csv
+python run_pipeline.py
 ```
 
-## What Has Been Done So Far
+## Outputs
 
-- Collected benchmark questions into `data/sql_questions.csv`.
-- Built a Gemini-based question decomposition pipeline.
-- Generated structured decomposition output for each question.
-- Captured the main decomposition fields needed to support SQL planning.
+After a successful run, the pipeline writes:
 
-## Next Steps
+- `logs/query_execution_log.csv` - per-query execution log
+- `logs/query_execution_report.csv` - benchmark report table
+- `logs/query_execution_results.json` - structured results with returned rows
 
-To fully satisfy `req1` and `req2`, the next work items are:
+## Evaluation Notes
 
-1. Create and store ground truth SQL queries for all benchmark questions.
-2. Execute queries against a real PostgreSQL schema and verify results.
-3. Add a formal evaluation strategy implementation for Text-to-SQL outputs.
-4. Expand the project into actual SQL generation and answer retrieval.
+The benchmark report includes the main execution fields needed for Task 3:
 
-## Notes
+- question
+- generated SQL
+- executed SQL
+- execution status
+- whether retry was needed
+- retry status
+- row count
+- latency
+- final status
+- error details
 
-- The project currently focuses on question understanding and structure rather than SQL generation.
-- This README is aligned with the current repository state and the target benchmark tasks.
+To complete correctness benchmarking, compare pipeline outputs against manually verified SQL or expected result sets for the benchmark questions.
